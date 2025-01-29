@@ -47,8 +47,8 @@ if "stock_data" in st.session_state:
             low=data['Low'],
             close=data['Close'],
             name="Candlestick",
-            increasing_line_color='#26A69A',  # Bright green for up candles
-            decreasing_line_color='#EF5350',  # Bright red for down candles
+            increasing_line_color='#26A69A',
+            decreasing_line_color='#EF5350',
             increasing_fillcolor='#26A69A',
             decreasing_fillcolor='#EF5350'
         )
@@ -61,6 +61,22 @@ if "stock_data" in st.session_state:
         ["20-Day SMA", "20-Day EMA", "20-Day Bollinger Bands", "VWAP", "MACD", "RSI"],
         default=["20-Day SMA"]
     )
+
+    def calculate_rsi(data, window=14):
+        """Calculate RSI for the given data."""
+        delta = data['Close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs))
+
+    def calculate_macd(data):
+        """Calculate MACD and signal line."""
+        exp1 = data['Close'].ewm(span=12, adjust=False).mean()
+        exp2 = data['Close'].ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
+        signal = macd.ewm(span=9, adjust=False).mean()
+        return macd, signal
 
     # Helper function to add indicators to the chart
     def add_indicator(indicator):
@@ -81,18 +97,10 @@ if "stock_data" in st.session_state:
             data['VWAP'] = (data['Close'] * data['Volume']).cumsum() / data['Volume'].cumsum()
             fig.add_trace(go.Scatter(x=data.index, y=data['VWAP'], mode='lines', name='VWAP'))
         elif indicator == "RSI":
-            # Calculate RSI
-            delta = data['Close'].diff()
-            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs))
-            
-            # Create RSI subplot
+            rsi = calculate_rsi(data)
             fig.add_trace(go.Scatter(x=data.index, y=rsi, mode='lines', 
                                    name='RSI', yaxis='y2'))
             
-            # Add RSI reference lines at 70 and 30
             fig.add_trace(go.Scatter(
                 x=[data.index[0], data.index[-1]],
                 y=[70, 70],
@@ -111,13 +119,7 @@ if "stock_data" in st.session_state:
                 yaxis='y2'
             ))
         elif indicator == "MACD":
-            # Calculate MACD components
-            exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-            exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-            macd = exp1 - exp2
-            signal = macd.ewm(span=9, adjust=False).mean()
-            
-            # Create a new subplot for MACD
+            macd, signal = calculate_macd(data)
             fig.add_trace(go.Scatter(x=data.index, y=macd, mode='lines', 
                                    name='MACD', yaxis='y3'))
             fig.add_trace(go.Scatter(x=data.index, y=signal, mode='lines', 
@@ -130,31 +132,27 @@ if "stock_data" in st.session_state:
     fig.update_layout(xaxis_rangeslider_visible=False)
     fig.update_layout(
         xaxis_rangeslider_visible=False,
-        yaxis=dict(gridcolor='#31333F'),  # Darker grid lines for dark background
+        yaxis=dict(gridcolor='#31333F'),
         xaxis=dict(gridcolor='#31333F')
     )
 
     # Update layout based on selected indicators
     layout_update = {
         'height': 800,
-        'yaxis': dict(domain=[0.6, 1])  # Main chart always at top
+        'yaxis': dict(domain=[0.6, 1])
     }
 
-    # Adjust subplot layouts based on indicator selection
     if "RSI" in indicators and "MACD" in indicators:
-        # Both RSI and MACD
         layout_update.update({
-            'height': 1000,  # Increase height for both indicators
-            'yaxis2': dict(title="RSI", domain=[0.35, 0.55]),  # RSI in middle
-            'yaxis3': dict(title="MACD", domain=[0.1, 0.3])    # MACD at bottom
+            'height': 1000,
+            'yaxis2': dict(title="RSI", domain=[0.35, 0.55]),
+            'yaxis3': dict(title="MACD", domain=[0.1, 0.3])
         })
     elif "RSI" in indicators:
-        # Only RSI
         layout_update.update({
             'yaxis2': dict(title="RSI", domain=[0.1, 0.3])
         })
     elif "MACD" in indicators:
-        # Only MACD
         layout_update.update({
             'yaxis3': dict(title="MACD", domain=[0.1, 0.3])
         })
@@ -167,26 +165,16 @@ if "stock_data" in st.session_state:
     st.subheader("AI-Powered Analysis")
     if st.button("Run AI Analysis"):
         with st.spinner("Analyzing the chart, please wait..."):
-            # Save chart as a temporary image
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
                 fig.write_image(tmpfile.name)
                 tmpfile_path = tmpfile.name
 
-            # Read image and encode to Base64
             with open(tmpfile_path, "rb") as image_file:
                 image_data = base64.b64encode(image_file.read()).decode('utf-8')
 
-            # Prepare technical data summary
             tech_data = ""
             if "RSI" in indicators:
-                # Calculate RSI
-                delta = data['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                rsi = 100 - (100 / (1 + rs))
-                
-                # Get last 10 RSI values and their dates
+                rsi = calculate_rsi(data)
                 recent_rsi = rsi.tail(10)
                 rsi_data = "\nRecent RSI values:"
                 for date, value in recent_rsi.items():
@@ -194,13 +182,7 @@ if "stock_data" in st.session_state:
                 tech_data += rsi_data
 
             if "MACD" in indicators:
-                # Calculate MACD components
-                exp1 = data['Close'].ewm(span=12, adjust=False).mean()
-                exp2 = data['Close'].ewm(span=26, adjust=False).mean()
-                macd = exp1 - exp2
-                signal = macd.ewm(span=9, adjust=False).mean()
-                
-                # Get last 10 MACD and Signal values with dates
+                macd, signal = calculate_macd(data)
                 recent_data = pd.DataFrame({
                     'MACD': macd.tail(10),
                     'Signal': signal.tail(10)
@@ -210,7 +192,6 @@ if "stock_data" in st.session_state:
                     macd_data += f"\n{date.strftime('%Y-%m-%d')}: MACD={row['MACD']:.2f}, Signal={row['Signal']:.2f}"
                 tech_data += macd_data
 
-            # Prepare AI analysis request
             messages = [{
                 'role': 'user',
                 'content': f"""You are a Stock Trader specializing in Technical Analysis at a top financial institution.
@@ -224,9 +205,7 @@ if "stock_data" in st.session_state:
             }]
             response = ollama.chat(model='llama3.2-vision', messages=messages)
 
-            # Display AI analysis result
             st.write("**AI Analysis Results:**")
             st.write(response["message"]["content"])
 
-            # Clean up temporary file
             os.remove(tmpfile_path)
