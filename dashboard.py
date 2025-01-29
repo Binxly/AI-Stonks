@@ -139,7 +139,8 @@ if "stock_data" in st.session_state:
     # Update layout based on selected indicators
     layout_update = {
         'height': 800,
-        'yaxis': dict(domain=[0.6, 1])
+        'yaxis': dict(domain=[0.6, 1]),
+        'title': f"{ticker} Performance Chart ({start_date.strftime('%Y-%m-%d')} - {end_date.strftime('%Y-%m-%d')})"
     }
 
     if "RSI" in indicators and "MACD" in indicators:
